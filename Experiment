@@ -43,6 +43,13 @@ supervisor_input.addField('Testleiter:', choices=['AC', 'CS', 'DG', 'LO', 'MT'])
 supervisor_input.addField('Geschlecht:', choices=['männlich', 'weiblich', 'divers'])
 supervisor_input.show()
 
+# Minimize the window temporarily to show the input dialog
+win.winHandle.minimize()
+supervisor_input.show()
+
+# Restore the experiment window before continuing
+win.winHandle.maximize()
+
 # Eingabe der Daten und Speicherung in subject data file
 if supervisor_input.OK:
     participant_id = supervisor_input.data[0]
