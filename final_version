@@ -1,0 +1,507 @@
+#Version 20.08.23
+
+#Experiment
+# Anna Caprita, Deborah Gut, Leonie Orlikowski, Christin Sobotta, Mette Trettin
+
+import os
+import glob
+from psychopy import gui, core, visual, event
+import random
+import pandas as pd
+
+# Experimentkonfiguration
+img_dir = os.getcwd() + '/Stimuli/Spinnenbilder/'     
+img_list = glob.glob(img_dir + '*.jpg')
+
+neutral_img_dir = os.getcwd() + '/Stimuli/Neutrale_Bilder/'    
+neutral_list = glob.glob(neutral_img_dir + '*.jpg')
+
+train_img_dir = os.getcwd() + '/Stimuli/Trainingsbilder/'      
+train_list = glob.glob(train_img_dir + '*.jpg')    
+
+block_num = 1   #4
+block_num_test = 1
+trial_num = 10   #35
+trial_num_test_block = 2    #10
+
+#Leere Listen für die Datenerfassung erstellen
+reactiontime_list = []
+accuracy_list = []
+orientation_list = []
+stimulus_list = []
+keypress_list = []
+trial_number_list = []
+block_number_list = []
+
+# Supervisor input
+supervisor_input = gui.Dlg(title='Probanden-Daten', pos=(0, 0))
+supervisor_input.addText('Bitte folgende Daten von Versuchsperson erfragen:')
+supervisor_input.addField('Probanden-ID:')
+supervisor_input.addField('Alter:')
+supervisor_input.addField('Brillenträger:', choices=['Ja', 'Nein'])
+supervisor_input.addField('Testleiter:', choices=['AC', 'CS', 'DG', 'LO', 'MT'])
+supervisor_input.addField('Geschlecht:', choices=['männlich', 'weiblich', 'divers'])
+supervisor_input.show()
+
+# Fenster erstellen
+win = visual.Window(
+    size=[1920, 1280],
+    fullscr=True,
+    color = 'white')
+
+# Eingabe der Daten und Speicherung in subject data file
+if supervisor_input.OK:
+    participant_id = supervisor_input.data[0]
+    age = supervisor_input.data[1]
+    glasses = supervisor_input.data[2]
+    testleiter = supervisor_input.data[3]
+    geschlecht = supervisor_input.data[4]
+
+    # Dateipfad modifizieren
+    subject_file_path = os.getcwd() + '/Daten/subject_' + participant_id + '.tsv'
+    subject_file_path2 = os.getcwd() + '/Daten/subject_' + participant_id + '.csv'
+
+    # Datei für VP-Daten erstellen/laden
+    if os.path.isfile(subject_file_path):
+        subject_data = pd.read_csv(subject_file_path, delimiter='\t')
+    else:
+        subject_data = pd.DataFrame({'sub_id': [],
+                                     'age': [],
+                                     'sex': [],
+                                     'glasses': [],
+                                     'block': [],
+                                     'trial': [],
+                                     'reaction_time': [],
+                                     'accuracy': [],        #sagt ob Richtung von L und Testendruck übereinstimmt
+                                     'orientation': [],     #gibt an in welche Richtung  l gedreht ist
+                                     'stimulus': [],        #gibt an ob spinnenbild oder neutrales Bild gezeigt wird
+                                     'keypress':[]})        #gibt an welcher pfeil gedrückt wurde
+        reaction_clock = core.Clock()
+
+    # Antworten sammeln und zu subject data hinzufügen
+    def collect_responses(sub_id, 
+                          age,
+                          sex, 
+                          glasses,       
+                          block, 
+                          trial, 
+                          reaction_time, 
+                          accuracy, 
+                          keypress, 
+                          orientation,
+                          stimulus):
+        #print(sub_id)
+        sub_id_list = [sub_id]*len(reaction_time)      
+        #print (sub_id_list)
+        age_list = [age]*len(reaction_time)
+        #print( age_list)
+        sex_list = [sex]*len(reaction_time)
+        #print( sex_list)
+        glasses_list = [glasses]*len(reaction_time)
+        #print(glasses_list)
+        #print(accuracy_list)
+        #print(orientation_list)
+        #print(reactiontime_list)
+        #print(stimulus_list)
+        #print(keypress_list)
+        #print(trial_number_list)
+        #print(block_number_list)
+        
+        data_dict = dict({'sub_id': sub_id_list,
+                                     'age': age_list,
+                                     'sex': sex_list,
+                                     'glasses': glasses_list,
+                                     'block': block,
+                                     'trial': trial,
+                                     'reaction_time': reaction_time,
+                                     'accuracy': accuracy,
+                                     'keypress': keypress,
+                                     'orientation': orientation,
+                                     'stimulus': stimulus})     
+
+        #print(data_dict)
+
+        data = pd.DataFrame(dict([ (k,pd.Series(v)) for k,v in data_dict.items() ]))
+        #print(data)
+
+        return data 
+   
+else:
+    print("Supervisor input canceled.")
+
+#Instruktionen
+instructions = {
+    'instructions_1': 'Willkommen zu unserem Experiment. \n\n'
+                     'Dieses Experiment findet im Rahmen des Experimentalpraktikums '
+                     'des B.Sc. Psychologie an der Universität Magdeburg statt. \n\n'
+                     'Bitte drücken Sie die Leertaste, um zu beginnen.',
+    'instructions_2': 'In diesem Experiment werden Sie nach "L"s suchen.\n\n'
+                      'In jedem Durchgang werden mehrere Buchstaben auf dem Display erscheinen.'
+                      'Einer davon wird ein "L" sein, bei den anderen handelt es sich um "T"s.\n\n'
+                      'Das L ist dabei entweder nach links oder nach rechts gedreht.'
+                      'Sobald Sie das "L" finden, drücken Sie bitte so schnell wie möglich auf die Pfeiltaste, die mit der Richtung des "L"s übereinstimmt.\n\n'
+                      'Wenn der waagerechte Balken also nach rechts zeigt, drücken Sie bitte die rechte Pfeiltaste. \n\n'
+                      'Wenn der waagerechte Balken also nach links zeigt, drücken Sie bitte die linke Pfeiltaste. \n\n',
+    'instructions_3': 'Das Ziel ist es, das "L" so schnell wie möglich zu finden.'
+                      'Wenn Sie das "L" nach 10 Sekunden nicht gefunden haben, werden Sie automatisch zum nächsten Bildschirm weitergeleitet. \n\n' 
+                      'Zwischen den einzelnen Blöcken können Sie eine kurze Pause machen.\n\n'
+                      'Bitte drücken Sie die Leertaste, um fortzufahren.',
+    'instructions_4': 'Das Experiment besteht aus 4 Blöcken mit jeweils 35 Trials.\n\n'         #Zahlen ändern
+                        'Zusätzlich werden zu Beginn einige Probedurchgänge durchgeführt.\n\n'
+                        'Insgesamt dauert das Experiment ungefähr 15 Minuten.',                   #Zeit
+    'instructions_5': 'Falls Sie noch Fragen haben, wenden Sie sich gerne jetzt an die Versuchsleitung. '
+                      'Sie haben jederzeit die Möglichkeit, das Experiment abzubrechen.\n\n'
+                      'Viel Erfolg!\n\n'
+                      'Bitte drücken Sie die Leertaste, um mit den Probedurchgängen zu beginnen.',
+}
+
+# Experiment Funktionen
+def present_text(window_instance,
+                 instr_text=':-)', 
+                 text_size=0.06,     
+                 text_position=(0., 0.),
+                 color = 'black',
+                 unit='norm',
+                 continue_key='space'):
+    
+    text_stim = visual.TextStim(window_instance, 
+                                height=text_size, 
+                                color=color,
+                                units=unit, 
+                                pos=text_position)
+    text_stim.setText(instr_text)
+    text_stim.draw()
+    window_instance.flip()
+    event.waitKeys(keyList=[continue_key])
+
+    return None
+
+# Fixationskreuz definieren
+def draw_fixation(window_instance,
+                  fixation_position=(0., 0.)):
+    
+    fixation = visual.ShapeStim(window_instance,
+                                pos=fixation_position,
+                                vertices=((0, -0.025), (0, 0.025), (0,0), (-0.015,0), (0.015, 0)),
+                                lineWidth=3,
+                                closeShape=False,
+                                lineColor='black')
+    fixation.draw()
+    window_instance.update()
+    core.wait(1.0)
+
+    return None
+
+#Bilder präsentieren
+def present_img(window_instance,
+                img_input,
+                image_position=(0., 0.)):
+    
+    substring = 'Spinne'
+
+    if substring in img_input:
+        stimulus_list.append("spinne")
+        print("spinne")
+    elif not substring in img_input:
+        stimulus_list.append("neutral")
+        print("neutral")
+            
+    image_stim = visual.ImageStim(window_instance,
+                                  image=img_input,
+                                  pos=image_position)
+    image_stim.draw()
+    window_instance.flip()  
+    core.wait(2.0) 
+    
+    return None
+
+def Suchdisplay(window_instance):
+    # Stimuli erstellen
+    orientation = random.choice([True, False])
+    target_stimulus = visual.TextStim(window_instance, 
+                                      text="L", 
+                                      color="black", 
+                                      flipHoriz=orientation, 
+                                      units='pix',
+                                      height=30)
+    distractor_stimulus = visual.TextStim(window_instance, 
+                                          text="T", 
+                                          color="black", 
+                                          units='pix',
+                                          height=30)
+
+    # Positionen der Stimuli definieren
+    randomlist = [
+        (100, 0), (-100, 0), (0, 100), (0, -100), (70.71, 70.71), (-70.71, 70.71),
+        (70.71, -70.71), (-70.71, -70.71), (200, 0), (173.2, 100), (100, 173.2),
+        (0, 200), (-100, 173.2), (-173.2, 100), (-200, 0), (-173.2, -100),
+        (-100, -173.2), (0, -200), (100, -173.2), (173.2, -100), (300, 0),
+        (259.8, 150), (150, 259.8), (0, 300), (-150, 259.8), (-259.8, 150),
+        (-300, 0), (-259.8, -150), (-150, -259.8), (0, -300), (150, -259.8),
+        (259.8, -150), (400, 0), (346.41, 200), (200, 346.41), (0, 400),
+        (-200, 346.41), (-346.41, 200), (-400, 0), (-346.41, -200),
+        (-200, -346.41), (0, -400), (200, -346.41), (346.41, -200)
+    ]
+
+    jitter_amount = 20
+
+    # Distraktoren gleichmäßig auf die Quadranten verteilen
+    distractors_per_quadrant = 20 // 4
+    distractors_per_quadrant_list = [distractors_per_quadrant] * 4
+    remaining_distractors = 20 - (distractors_per_quadrant * 4)
+
+    for i in range(remaining_distractors):
+        distractors_per_quadrant_list[i] += 1
+
+    # Liste der Quadranten
+    quadrants = [[], [], [], []]
+
+    # Distraktoren auf Quadranten aufteilen
+    for i in range(4):
+        distractors = random.sample(randomlist, distractors_per_quadrant_list[i])
+        quadrants[i] = distractors
+        for distractor in distractors:
+            randomlist.remove(distractor)
+
+    # Stimuli anzeigen
+    for i, quadrant in enumerate(quadrants):
+        for position in quadrant:
+            x, y = position
+            jitter_x = random.uniform(-jitter_amount, jitter_amount)
+            jitter_y = random.uniform(-jitter_amount, jitter_amount)
+            x += jitter_x
+            y += jitter_y
+            distractor_stimulus.pos = (x, y)
+            distractor_stimulus.draw()
+
+    # Zufällige Position für das Zielstimulus auswählen
+    target_position = random.choice(randomlist)
+    target_stimulus.pos = target_position
+    target_stimulus.draw()
+
+    window_instance.flip()
+    reactionclock = core.Clock()
+
+    # Auf Tastendruck warten
+    response = event.waitKeys(keyList=["left", "right", "escape"])  
+
+    keypress = []
+    if "left" in response:
+        reactiontime = reactionclock.getTime()
+        reactiontime_list.append(reactiontime) 
+        #print(reactiontime)
+        keypress = "links"
+        keypress_list.append(keypress)
+        #print(keypress)
+    elif "right" in response:
+        reactiontime = reactionclock.getTime()
+        reactiontime_list.append(reactiontime) 
+        #print(reactiontime)
+        keypress = "rechts"
+        keypress_list.append(keypress)
+        #print(keypress)
+    elif "escape" in response:
+        core.quit()
+  
+    if orientation == True:
+        orientation_list.append("links")
+    elif orientation == False:
+        orientation_list.append("rechts")
+
+    if (orientation == True and keypress == "links") or (orientation == False and keypress == 'rechts'):
+        accuracy_list.append("richtig")
+    else:
+        accuracy_list.append("falsch")
+
+    return None
+
+#ITI definieren
+def present_ITI(window_instance,     #ITI=Inter-Trial-Interval (Zeit zwischen zwei Trials)
+                duration=1.0): 
+    window_instance.update()
+    core.wait(duration)
+    
+    return None
+
+# Funktion für Probedurchgänge
+def practice_trials(win, 
+                    train_list,
+                    trial_num_test_block,
+                    block_num_test): 
+    for trial in range(trial_num_test_block):
+        draw_fixation(window_instance=win)
+        img_input = random.choice(train_list)
+        present_img(window_instance=win, 
+                    img_input=img_input)      
+        Suchdisplay(window_instance=win)
+        trial_number_list.append(trial)
+        block_number_list.append(block_num_test)   
+        present_ITI(window_instance=win)
+
+# Funktion für Test-Block
+def test_block(win,
+               train_list,
+               trial_num_test_block):
+    present_text(window_instance=win,
+                 instr_text='Test-Block: In diesem Durchgang können Sie das Experiment üben. Die Daten werden nicht gespeichert. \n\n'
+                 'Bitte drücken Sie die Leertaste, um fortzufahren.')
+    practice_trials(win,                 
+                    train_list,
+                    trial_num_test_block,
+                    block_num_test = 0)
+
+# Funktion für einen einzelnen Durchgang
+def single_trial(win, 
+                 image_list,
+                 neutral_list,
+                 trial_num,
+                 block_num):
+    
+    # Berechne die Anzahl der Stimuli aus jeder Liste
+    num_images = trial_num // 2  # Die Hälfte der Stimuli aus image_list
+    num_neutral = trial_num // 2  # Die Hälfte der Stimuli aus neutral_list
+    
+    # Mische die Listen, um zufällige Auswahl sicherzustellen
+    random.shuffle(image_list)
+    random.shuffle(neutral_list)
+
+    last_image = None  # Speichert das zuletzt ausgewählte Bild
+    images_used_in_block = set()  # Hält die bereits im aktuellen Block verwendeten Bilder
+    
+    for trial in range(trial_num):
+        draw_fixation(window_instance=win)
+        # Entscheide, ob ein Bild oder ein neutrales Element angezeigt wird
+        if num_images > 0 and (num_neutral == 0 or random.random() < 0.5):
+           # Wähle ein Bild aus, das nicht dem letzten ausgewählten Bild entspricht
+            available_images = [img for img in image_list if img != last_image and img not in images_used_in_block]
+            if not available_images:
+                # Alle Bilder wurden im aktuellen Block verwendet, also verwende ein zufälliges Bild
+                img_input = random.choice(image_list)
+            else:
+                img_input = random.choice(available_images)
+            last_image = img_input
+            num_images -= 1
+        else:
+            img_input = random.choice(neutral_list)
+            num_neutral -= 1
+        present_img(window_instance=win, 
+                    img_input=img_input)
+        Suchdisplay(window_instance=win)
+        trial_number_list.append(trial)
+        block_number_list.append(block_num)     
+        present_ITI(window_instance=win)
+
+# Funktion für das gesamte Experiment
+def start_experiment(win, 
+                     instruction_dict, 
+                     train_list, 
+                     image_list,
+                     neutral_list, 
+                     trial_num, 
+                     block_num):
+    # Anweisungen anzeigen
+    for instruction_text in instruction_dict.values():
+        present_text(window_instance=win, 
+                     instr_text=instruction_text)
+
+    # Probedurchgänge durchführen
+    test_block(win,
+               train_list,
+               trial_num_test_block)
+
+    # Spinnenblöcke starten
+    for block in range(1, block_num + 1):
+        present_text(window_instance=win, 
+                     instr_text=f'Starte Block Nummer: {block}\n\n Drücken Sie die Leertaste um zu beginnen.')
+        single_trial(win, 
+                    image_list,
+                    neutral_list,
+                    trial_num,
+                    block)
+        if block < block_num:
+            present_text(window_instance=win,
+                         instr_text='Block abgeschlossen. Bitte machen Sie eine kurze Pause. Drücken Sie die Leertaste, um den nächsten Block zu starten.')
+        else:
+            present_text(window_instance=win,
+                         instr_text='Sie haben das Experiment erfolgreich beendet. Vielen Dank für Ihre Teilnahme!')
+
+# Experiment starten
+start_experiment(win=win, 
+                 instruction_dict=instructions,
+                 train_list=train_list,
+                 image_list=img_list,
+                 neutral_list=neutral_list, 
+                 trial_num=trial_num, 
+                 block_num=block_num)
+
+#print(participant_id)
+#print(age)
+#print(geschlecht)
+#print(glasses)
+#print(trial_number_list)
+#print(block_number_list)
+#print(reactiontime_list)
+#print(accuracy_list)
+#print(keypress_list)
+#print(orientation_list)
+#print(stimulus_list)
+
+#Datenspeicherung
+trial_data = collect_responses(participant_id, 
+                               age, 
+                               geschlecht, 
+                               glasses, 
+                               block_number_list, 
+                               trial_number_list,
+                               reactiontime_list, 
+                               accuracy_list,
+                               keypress_list, 
+                               orientation_list,
+                               stimulus_list)
+                    
+subject_data = pd.concat([subject_data, trial_data], 
+                         ignore_index=True)
+
+#subject data zu individual participant file sortieren
+subject_data.to_csv(subject_file_path, sep='\t', index=False, float_format='%.3f')
+subject_data.to_csv(subject_file_path2, sep=';', index=False, float_format='%.3f')
+
+#subject data aus dem individual participant file laden
+loaded_data = pd.read_csv(subject_file_path, delimiter='\t')
+
+# Zugriff auf die geladenen Daten
+print(loaded_data)
+
+#print(reactiontime_list)
+#print(accuracy_list)
+#print(orientation_list)
+#print(stimulus_list)
+#print(keypress_list)
+
+#Experiment beenden
+
+
+#To Do:
+# - mehr Bilder! (mehr Bäume -> ~50, optimale Größe: 800x800, nicht über 1000)
+# - Bilder anpassen von der Größe her
+
+# Literatur:
+    #wie viele Probetrials?   -> 10
+    #wie viele Blöcke    -> 4
+    # wie trials?   -> insgesamt 140
+    # trials pro Block: 35
+    #Präsentationsdauer Fixationskreuz und Bilder?
+    #welche Reihenfolge der Bilder?   -> randomisiert
+
+
+#Stresstest:
+    #werden Bilder innerhalb eines Blockes doppelt angezeigt? (sollte nicht so sein)
+    #Präsentationsdauer (Bilder, Fixationskreuz, ITI): findet ihr das gut, sollte es länger/kürzer sein?
+    #Aufteilung und Anzahl der Blöcke und trials (im Moment: 4 Blöcke à 35 Trials -> insg. 140 trials): gut so oder ändern?
+        #ungefähr ausgerechnete Dauer (mit jetzigen Zahlen): 20 Minuten (~11 Minuten richtiges Experiment, ~1 Minute Probeblock, +Instruktionen und allem drumherum)
+    #was passiert, wenn andere Tasten gedrückt werden?
+    #was passiert, wenn man keine Tasten drückt? (bei Suchdisplays sollte nach 10s automatisch weitergehen -> funktioniert das?)
+    #sind neutrale und Spinnenbilder von der Anzahl ungefähr ausgeglichen?
+    #was immer euch noch einfällt
+    #sind Instruktionen so ok? würdet ihr was anders machen?
+    #generell Rückmeldung ob ihr was anders haben wollt
